@@ -10,7 +10,7 @@ void train_detector(char *datacfg, char *cfgfile, char *weightfile, int *gpus, i
 
     srand(time(0));
     char *base = basecfg(cfgfile);
-    printf("%s\n", base);
+    printf("base: %s\n", base);
     float avg_loss = -1;
     network *nets = calloc(ngpus, sizeof(network));
 
@@ -64,7 +64,7 @@ void train_detector(char *datacfg, char *cfgfile, char *weightfile, int *gpus, i
             int dim = (rand() % 10 + 10) * 32;
             if (get_current_batch(net)+200 > net.max_batches) dim = 608;
             //int dim = (rand() % 4 + 16) * 32;
-            printf("%d\n", dim);
+            printf("dimension: %d\n", dim);
             args.w = dim;
             args.h = dim;
 

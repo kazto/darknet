@@ -235,6 +235,12 @@ image **load_alphabet()
     return alphabets;
 }
 
+#if PERSONONLY == 1
+#define DRAWCONDITION (class == 0 || class == 32)
+#else
+#define DRAWCONDITION (1)
+#endif
+
 void draw_detections(image im, int num, float thresh, box *boxes, float **probs, float **masks, char **names, image **alphabet, int classes)
 {
     int i,j;
@@ -255,7 +261,7 @@ void draw_detections(image im, int num, float thresh, box *boxes, float **probs,
             }
         }
         if(class >= 0){
-            int width = im.h * .006;
+            int width = im.h * .003;
 
             /*
                if(0){
@@ -288,20 +294,23 @@ void draw_detections(image im, int num, float thresh, box *boxes, float **probs,
             if(top < 0) top = 0;
             if(bot > im.h-1) bot = im.h-1;
 
-            draw_box_width(im, left, top, right, bot, width, red, green, blue);
-            if (alphabet) {
-                image label = get_label(alphabet, labelstr, (im.h*.03)/10);
-                draw_label(im, top + width, left, label, rgb);
-                free_image(label);
-            }
-            if (masks){
-                image mask = float_to_image(14, 14, 1, masks[i]);
-                image resized_mask = resize_image(mask, b.w*im.w, b.h*im.h);
-                image tmask = threshold_image(resized_mask, .5);
-                embed_image(tmask, im, left, top);
-                free_image(mask);
-                free_image(resized_mask);
-                free_image(tmask);
+            if(DRAWCONDITION)
+            {
+                draw_box_width(im, left, top, right, bot, width, red, green, blue);
+                if (alphabet) {
+                    image label = get_label(alphabet, labelstr, (im.h*.03)/10);
+                    draw_label(im, top + width, left, label, rgb);
+                    free_image(label);
+                }
+                if (masks){
+                    image mask = float_to_image(14, 14, 1, masks[i]);
+                    image resized_mask = resize_image(mask, b.w*im.w, b.h*im.h);
+                    image tmask = threshold_image(resized_mask, .5);
+                    embed_image(tmask, im, left, top);
+                    free_image(mask);
+                    free_image(resized_mask);
+                    free_image(tmask);
+                }
             }
         }
     }

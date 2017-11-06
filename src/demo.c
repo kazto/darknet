@@ -8,6 +8,7 @@
 #include "image.h"
 #include "demo.h"
 #include <sys/time.h>
+#include <stdio.h>
 
 #define DEMO 1
 
@@ -38,6 +39,9 @@ static int demo_done = 0;
 static float *avg;
 double demo_time;
 
+static FILE *csv = NULL;
+static int count = 0;
+
 void *detect_in_thread(void *ptr)
 {
     running = 1;
@@ -62,6 +66,7 @@ void *detect_in_thread(void *ptr)
     printf("\033[2J");
     printf("\033[1;1H");
     printf("\nFPS:%.1f\n",fps);
+    printf("\nFrame:%d\n",count);
     printf("Objects:\n\n");
     image display = buff[(buff_index+2) % 3];
     draw_detections(display, demo_detections, demo_thresh, boxes, probs, 0, demo_names, demo_alphabet, demo_classes);
@@ -112,6 +117,85 @@ void *detect_loop(void *ptr)
 {
     while(1){
         detect_in_thread(0);
+    }
+}
+
+void open_csv(const char *filename)
+{
+    char namebuf[256] = {0};
+    int i;
+
+    memcpy(namebuf, filename, strlen(filename));
+    /* overwrite extensions. */
+    for(i = (int)strlen(filename); i >= 0; i--)
+    {
+        if(namebuf[i] == '.')
+        {
+            namebuf[i+1] = 'c';
+            namebuf[i+2] = 's';
+            namebuf[i+3] = 'v';
+            namebuf[i+4] = 0;
+            break;
+        }
+    }
+
+    csv = fopen(namebuf, "w");
+    return;
+}
+
+void close_csv()
+{
+    if(csv)
+    {
+        fclose(csv);
+        csv = NULL;
+    }
+}
+
+int is_draw_box(float *prob, int class, float thresh)
+{
+    int   cls = max_index(prob, class);
+    float pr  = prob[cls];
+
+    if(cls == 0 /* person */ || cls == 32 /* sports ball */)
+        return (pr > thresh) ? 1 : 0;
+    else
+        return 0;
+}
+
+void write_csv()
+{
+    if(csv)
+    {
+        int i;
+        int num;
+        int written = 0;
+
+        num = num_boxes(&net);
+        for(i = 0; i<num; i++)
+        {
+            if(is_draw_box(probs[i], demo_classes, demo_thresh))
+            {
+                float x,y,w,h,p,yfoot;
+                int cls = max_index(probs[i], demo_classes);
+
+                x = boxes[i].x;
+                y = boxes[i].y;
+                yfoot = boxes[i].y + boxes[i].h/2.0f;
+                w = boxes[i].w;
+                h = boxes[i].h;
+                p = probs[i][cls];
+                if(written)
+                {
+                    fprintf(csv, ",");
+                }
+                fprintf(csv, "%s,%f,%f,%f,%f,%f,%f", demo_names[cls], x, y, w, h, yfoot, p);
+                written = 1;
+            }
+        }
+
+        fprintf(csv, "\n");
+        fflush(csv);
     }
 }
 
@@ -174,9 +258,8 @@ void demo(char *cfgfile, char *weightfile, float thresh, int cam_index, const ch
     buff_letter[2] = letterbox_image(buff[0], net.w, net.h);
     ipl = cvCreateImage(cvSize(buff[0].w,buff[0].h), IPL_DEPTH_8U, buff[0].c);
 
-    int count = 0;
     if(!prefix){
-        cvNamedWindow("Demo", CV_WINDOW_NORMAL); 
+        cvNamedWindow("Demo", CV_WINDOW_NORMAL);
         if(fullscreen){
             cvSetWindowProperty("Demo", CV_WND_PROP_FULLSCREEN, CV_WINDOW_FULLSCREEN);
         } else {
@@ -186,6 +269,11 @@ void demo(char *cfgfile, char *weightfile, float thresh, int cam_index, const ch
     }
 
     demo_time = what_time_is_it_now();
+
+    if(filename)
+    {
+        open_csv(filename);
+    }
 
     while(!demo_done){
         buff_index = (buff_index + 1) %3;
@@ -202,8 +290,13 @@ void demo(char *cfgfile, char *weightfile, float thresh, int cam_index, const ch
         }
         pthread_join(fetch_thread, 0);
         pthread_join(detect_thread, 0);
+
+        write_csv();
+
         ++count;
     }
+
+    close_csv();
 }
 
 void demo_compare(char *cfg1, char *weight1, char *cfg2, char *weight2, float thresh, int cam_index, const char *filename, char **names, int classes, int delay, char *prefix, int avg_frames, float hier, int w, int h, int frames, int fullscreen)
